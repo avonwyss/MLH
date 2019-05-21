@@ -414,6 +414,9 @@ class Farmware(Generic[TConfig]):
         """
         Store an existing or new point
         """
+        device.log(f"Sending point {json.dumps(point)}", 'debug')
+        if self.debug:
+            return point
         return get_factory(Point)(app.put('/api/points', point.id, point) if point.id is not None else app.post('/api/points', cast(Any, point)))
 
     def add_plant(self, x: float, y: float, **kwargs) -> Plant:
@@ -469,17 +472,18 @@ class Farmware(Generic[TConfig]):
         :returns The previous position
         """
         position = self.bot_state().location_data.position
-        if isinstance(target, Tool):
-            target = self.get_toolslots(tool_id=target.id)[0]
-        if not isinstance(target, Coordinate):
-            target = position.merge(target)
-        if (travel_height is not None) and (travel_height > position.z or travel_height > target.z) and (abs(position.x - target.x) > proximity_range or abs(position.y - target.y) > proximity_range):
-            # travel height must be respected
-            if target.z + offset_z > travel_height:
-                travel_height = target.z + offset_z
-            device.move_relative(0, 0, travel_height - position.z, speed)
-            device.move_absolute(target.merge({'z': travel_height}).to_coordinate(), speed, device.assemble_coordinate(offset_x, offset_y, 0))
-            if abs((target.z + offset_z) - travel_height) <= 2:
-                return position
-        device.move_absolute(target.to_coordinate(), speed, device.assemble_coordinate(offset_x, offset_y, offset_z))
+        if not self.debug:
+            if isinstance(target, Tool):
+                target = self.get_toolslots(tool_id=target.id)[0]
+            if not isinstance(target, Coordinate):
+                target = position.merge(target)
+            if (travel_height is not None) and (travel_height > position.z or travel_height > target.z) and (abs(position.x - target.x) > proximity_range or abs(position.y - target.y) > proximity_range):
+                # travel height must be respected
+                if target.z + offset_z > travel_height:
+                    travel_height = target.z + offset_z
+                device.move_relative(0, 0, travel_height - position.z, speed)
+                device.move_absolute(target.merge({'z': travel_height}).to_coordinate(), speed, device.assemble_coordinate(offset_x, offset_y, 0))
+                if abs((target.z + offset_z) - travel_height) <= 2:
+                    return position
+            device.move_absolute(target.to_coordinate(), speed, device.assemble_coordinate(offset_x, offset_y, offset_z))
         return position
