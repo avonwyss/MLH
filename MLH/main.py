@@ -1,4 +1,6 @@
 import sys
+import traceback
+
 import requests
 from typing import *
 from farmware_tools import device
@@ -22,6 +24,6 @@ if __name__ == '__main__':
 
     except requests.exceptions.HTTPError as error:
         device.log(f'HTTP error {error.response.status_code} {error.response.text[0:100]} ', 'error')
-    except Exception as e:
-        device.log(f'Something went wrong: {str(e)}', 'error')
+    except Exception as ex:
+        device.log(f"Something went wrong: {''.join(traceback.format_exception(etype=type(ex), value=ex, tb=ex.__traceback__))}", 'error')
     sys.exit(1)
