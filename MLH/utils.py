@@ -63,7 +63,7 @@ def parse_date(val: Union[date, str, int, float, None], default: Optional[date] 
 def dump_datetime(val: Optional[datetime]) -> Optional[str]:
     """Dump an instant as ISO string ("YYYY-MM-DDThh:mm:ss.fffZ")"""
     if val:
-        return val.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        return val.strftime("%Y-%m-%dT%H:%M:%S.%f")[:23]+'Z'
 
 
 def dump_date(val: Optional[date]) -> Optional[str]:
@@ -142,6 +142,10 @@ class EntityFactory(object):
         return self.props
 
     def make(self, data: Dict[str, Any]) -> TEntity:
+        if isinstance(data, str):
+            data = ast.literal_eval(data)
+        if not isinstance(data, dict):
+            raise ValueError(f"Cannot make entity, expected dict but got {type(data).__name__}")
         for key, factory in self.get_props().items():
             data[key] = factory(data.get(key))
         return self.cls(__dict__=data)
@@ -187,7 +191,7 @@ def get_factory(expected_type: Type[TAny]) -> Callable[[Any], TAny]:
 def __json_encode_entity(self, obj: Any) -> Any:
     """Function used to monkey-patch json.JSONEncoder.default to add support for serialization"""
     if isinstance(obj, Entity):
-        return json.dumps(obj.__dict__)
+        return obj.__dict__
     if isinstance(obj, datetime):
         return dump_datetime(obj)
     if isinstance(obj, date):

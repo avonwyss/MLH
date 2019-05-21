@@ -3,7 +3,7 @@
   "language": "python",
   "author": "avonwyss",
   "description": "Gather weather data for any location in Switzerland",
-  "version": "1.0.7",
+  "version": "1.0.10",
   "min_os_version_major": 7,
   "farmware_tools_version": "v1.0.0",
   "url": "https://raw.githubusercontent.com/avonwyss/MLH/master/MLH/manifest.json",

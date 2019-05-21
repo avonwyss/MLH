@@ -316,11 +316,11 @@ class PointQuery(Generic[TPoint]):
 TConfig = TypeVar("TConfig", bound=Entity)
 
 
-def deserialize(type: Type[TAny], data: Any) -> TAny:
+def deserialize(typ: Type[TAny], data: Any) -> TAny:
     try:
-        return get_factory(type)(data)
+        return get_factory(typ)(data)
     except Exception as ex:
-        device.log(f"Failed to deserialize {type.__name__} from data {json.dumps(data)}")
+        device.log(f"Failed to deserialize {typ.__name__} from data {json.dumps(data)}")
         raise ex
 
 
