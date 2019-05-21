@@ -12,7 +12,7 @@ from abc import abstractmethod
 from farmware_tools import device, app
 from datetime import *
 from typing import *
-from utils import utc_now, get_factory, Entity, parse_datetime, dump_datetime, parse_offset
+from utils import utc_now, get_factory, Entity, parse_datetime, dump_datetime, parse_offset, TAny
 
 
 class Identifiable(Entity):
@@ -316,6 +316,14 @@ class PointQuery(Generic[TPoint]):
 TConfig = TypeVar("TConfig", bound=Entity)
 
 
+def deserialize(type: Type[TAny], data: Any) -> TAny:
+    try:
+        return get_factory(type)(data)
+    except Exception as ex:
+        device.log(f"Failed to deserialize {type.__name__} from data {json.dumps(data)}")
+        raise ex
+
+
 class Farmware(Generic[TConfig]):
     __sequences: Optional[List[Sequence]]
     __tools: Optional[List[Tool]]
@@ -344,7 +352,7 @@ class Farmware(Generic[TConfig]):
                     config[name] = env[1]
         device.log(f"Farmware raw config: {json.dumps(config)}", 'debug')
         try:
-            self.config = get_factory(config_type)(config)
+            self.config = deserialize(config_type, config)
         except Exception as e:
             raise ValueError('Error getting farmware config: ' + str(e))
         import utils
@@ -372,18 +380,18 @@ class Farmware(Generic[TConfig]):
 
     def bot_state(self) -> BotStateTree:
         """Get the device state."""
-        return get_factory(BotStateTree)(device.get_bot_state())
+        return deserialize(BotStateTree, device.get_bot_state())
 
     def sequences(self) -> List[Sequence]:
         """Get the available sequences."""
         if self.__sequences is None:
-            self.__sequences = get_factory(List[Sequence])(app.get('sequences'))
+            self.__sequences = deserialize(List[Sequence], app.get('sequences'))
         return self.__sequences
 
     def tools(self) -> List[Tool]:
         """Get the available tools."""
         if self.__tools is None:
-            self.__tools = get_factory(List[Tool])(app.get('tools'))
+            self.__tools = deserialize(List[Tool], app.get('tools'))
         return self.__tools
 
     def get_points(self, **kwargs) -> List[Point]:
@@ -392,7 +400,7 @@ class Farmware(Generic[TConfig]):
         Args:
             **kwargs filters, allowed keys include: pointer_type, name, meta, radius, x, y, z
         """
-        return get_factory(List[Point])(app.search_points(dict(**kwargs)))
+        return deserialize(List[Point], app.search_points(dict(**kwargs)))
 
     def get_genericpointers(self, **kwargs) -> List[Point]:
         """Query generic pointers from the web app.
@@ -425,7 +433,8 @@ class Farmware(Generic[TConfig]):
         device.log(f"Sending point {json.dumps(point)}", 'debug')
         if self.debug:
             return point
-        return get_factory(Point)(app.put('points', point.id, point) if point.id is not None else app.post('points', cast(Any, point)))
+        result = app.put('points', point.id, point) if point.id is not None else app.post('points', cast(Any, point))
+        return deserialize(Point, result)
 
     def add_plant(self, x: float, y: float, **kwargs) -> Plant:
         """Add a plant to the garden map.
@@ -443,7 +452,7 @@ class Farmware(Generic[TConfig]):
         for key, value in kwargs.items():
             if value is not None:
                 payload[key] = value
-        return get_factory(Plant)(app.post('points', payload))
+        return deserialize(Plant, app.post('points', payload))
 
     def get_sequence_by_name(self, name: str) -> Sequence:
         """Find the sequence_id for a given sequence name.
@@ -470,7 +479,7 @@ class Farmware(Generic[TConfig]):
         response.raise_for_status()
         for data in response.json()["data"]:
             if data["type"] == "crops" and data["attributes"]["slug"] == slug:
-                return get_factory(OpenFarm.Crop)(data)
+                return deserialize(OpenFarm.Crop, data)
         raise ValueError(f'Crop `{slug}` not found.')
 
     def moveto_smart(self, target: Union[Coordinate, Tool, Dict[str, int]], speed: int = 100, offset_x: int = 0, offset_y: int = 0, offset_z: int = 0, travel_height: Optional[int] = 0,
@@ -485,7 +494,8 @@ class Farmware(Generic[TConfig]):
                 target = self.get_toolslots(tool_id=target.id)[0]
             if not isinstance(target, Coordinate):
                 target = position.merge(target)
-            if (travel_height is not None) and (travel_height > position.z or travel_height > target.z) and (abs(position.x - target.x) > proximity_range or abs(position.y - target.y) > proximity_range):
+            if (travel_height is not None) and (travel_height > position.z or travel_height > target.z) and (
+                    abs(position.x - target.x) > proximity_range or abs(position.y - target.y) > proximity_range):
                 # travel height must be respected
                 if target.z + offset_z > travel_height:
                     travel_height = target.z + offset_z

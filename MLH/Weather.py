@@ -34,7 +34,7 @@ def load_weather(farmware: Farmware) -> Dict[str, HourlyWeather]:
     """
     Return the weather data currently stored
     """
-    return get_factory(Dict[str, HourlyWeather])(get_weather_point(farmware).meta)
+    return deserialize(Dict[str, HourlyWeather], get_weather_point(farmware).meta)
 
 
 class Weather(Farmware[Config]):
@@ -48,7 +48,7 @@ class Weather(Farmware[Config]):
         Refresh the weather data from the source and return it
         """
         point = get_weather_point(self)
-        weather = get_factory(Dict[str, HourlyWeather])(point.meta)
+        weather = deserialize(Dict[str, HourlyWeather], point.meta)
         self.update_weather(weather)
         limit = dump_datetime(datetime.utcnow() - timedelta(hours=(self.config.maxage_hours or 96) + 1))  # The dates are in a sortable format
         for key in [key for key in weather if key <= limit]:  # clone keys since we're going to remove items
