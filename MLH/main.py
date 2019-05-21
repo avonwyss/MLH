@@ -20,11 +20,8 @@ if __name__ == '__main__':
         app.execute()
         sys.exit(0)
 
-#    except requests.exceptions.HTTPError as error:
-#        device.log(f'HTTP error {error.response.status_code} {error.response.text[0:100]} ', 'error')
-#    except Exception as e:
-#        device.log(f'Something went wrong: {str(e)}', 'error')
-#    sys.exit(1)
-
-    finally:
-        pass
+    except requests.exceptions.HTTPError as error:
+        device.log(f'HTTP error {error.response.status_code} {error.response.text[0:100]} ', 'error')
+    except Exception as e:
+        device.log(f'Something went wrong: {str(e)}', 'error')
+    sys.exit(1)
