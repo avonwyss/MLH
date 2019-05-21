@@ -25,8 +25,8 @@ def get_weather_point(farmware: Farmware) -> Point:
     Get the weather GenericPointer, or an empty Point instance
     """
     try:
-        return get_factory(Point)(next(farmware.get_genericpointers(name='Weather')))
-    except StopIteration:
+        return farmware.get_genericpointers(name='Weather')[0]
+    except IndexError:
         return Point(pointer_type='GenericPointer', name='Weather', meta={})
 
 
