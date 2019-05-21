@@ -425,7 +425,7 @@ class Farmware(Generic[TConfig]):
         device.log(f"Sending point {json.dumps(point)}", 'debug')
         if self.debug:
             return point
-        return get_factory(Point)(app.put('/api/points', point.id, point) if point.id is not None else app.post('/api/points', cast(Any, point)))
+        return get_factory(Point)(app.put('points', point.id, point) if point.id is not None else app.post('points', cast(Any, point)))
 
     def add_plant(self, x: float, y: float, **kwargs) -> Plant:
         """Add a plant to the garden map.
