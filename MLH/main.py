@@ -9,10 +9,10 @@ if __name__ == '__main__':
 
     device.log(f'Args: {str(sys.argv)}', 'debug')
     try:
-        app_name = None if len(sys.argv) < 2 else sys.argv[1]
-        manifest_name = None if len(sys.argv) < 3 else sys.argv[2]
+        app_name = None if len(sys.argv) < 2 else sys.argv[1].lower()
+        manifest_name = None if len(sys.argv) < 3 else sys.argv[2].lower()
         app: Optional[Farmware] = None
-        if app_name == 'MeteoswissWeather':
+        if app_name == 'meteoswissweather':
             app = MeteoswissWeather(manifest_name)
         if not app:
             device.log(f'Farmware not found: {str(app_name)}', 'error')
