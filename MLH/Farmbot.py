@@ -123,6 +123,14 @@ class Point(Identifiable, Coordinate):
             self.pointer_type = get_pointer_type(typ)
         if self.meta is None:
             self.meta = {}
+        if self.x is None:
+            self.x = 0
+        if self.y is None:
+            self.y = 0
+        if self.z is None:
+            self.z = 0
+        if self.radius is None:
+            self.radius = 0.0
 
     def apply(self, updates: Dict[str, Any]):
         for key, value in updates.items():
