@@ -313,6 +313,24 @@ class PointQuery(Generic[TPoint]):
         return result
 
 
+class MoveOptimizer(object):
+    def __init__(self, targets: Iterable[Coordinate]):
+        self.targets = Set(targets)
+
+    def __iter__(self) -> Iterator[Coordinate]:
+        while len(self.targets) > 0:
+            curr_coord = get_factory(BotStateTree)(device.get_bot_state()).location_data.position
+            best_dist: float = math.inf
+            best_coord: Optional[Coordinate] = None
+            for coord in self.targets:
+                dist = coord.distance(curr_coord.x, curr_coord.y)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_coord = coord
+            self.targets.remove(best_coord)
+            yield best_coord
+
+
 TConfig = TypeVar("TConfig", bound=Entity)
 
 

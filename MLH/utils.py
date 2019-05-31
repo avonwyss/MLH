@@ -190,6 +190,8 @@ def get_factory(expected_type: Type[TAny]) -> Callable[[Any], TAny]:
 
 def __json_encode_entity(self, obj: Any) -> Any:
     """Function used to monkey-patch json.JSONEncoder.default to add support for serialization"""
+    if hasattr(obj, '__to_json__'):
+        return obj.__to_json__()
     if isinstance(obj, Entity):
         return obj.__dict__
     if isinstance(obj, datetime):
