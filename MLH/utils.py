@@ -185,16 +185,16 @@ def get_factory(expected_type: Type[TAny]) -> Callable[[Any], TAny]:
             else:
                 raise TypeError('Union with multiple non-None types is not supported')
         if nullable:
-            factory = (lambda val: None if val in (None, 'None') else factory(val)) if factory else (lambda val: None)
+            factory = (lambda val, factory=factory: None if val in (None, 'None') else factory(val)) if factory else (lambda val: None)
     elif origin_type in (List, list):
         item_type = getattr(expected_type, '__args__', expected_type.__parameters__)[0]
         item_factory: Callable[[Any], Any] = get_factory(item_type)
-        factory = lambda val: [item_factory(item) for item in (ast.literal_eval(val) if isinstance(val, str) else val)]
+        factory = lambda val, item_factory=item_factory: [item_factory(item) for item in (ast.literal_eval(val) if isinstance(val, str) else val)]
     elif origin_type in (Dict, dict):
         key_type, value_type = getattr(expected_type, '__args__', expected_type.__parameters__)
         key_factory: Callable[[Any], Any] = get_factory(key_type)
         value_factory: Callable[[Any], Any] = get_factory(value_type)
-        factory = lambda val: {key_factory(item[0]): value_factory(item[1]) for item in (ast.literal_eval(val) if isinstance(val, str) else val).items()}
+        factory = lambda val, key_factory=key_factory, value_factory=value_factory: {key_factory(item[0]): value_factory(item[1]) for item in (ast.literal_eval(val) if isinstance(val, str) else val).items()}
     elif issubclass(expected_type, Entity):
         factory = EntityFactory(cast(Any, expected_type)).make
     if not factory:
