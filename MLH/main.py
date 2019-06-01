@@ -5,6 +5,7 @@ import requests
 from typing import *
 from farmware_tools import device
 from Farmbot import Farmware
+from MLH import MLH
 from Weather import MeteoswissWeather
 
 if __name__ == '__main__':
@@ -16,6 +17,8 @@ if __name__ == '__main__':
         app: Optional[Farmware] = None
         if app_name == 'meteoswissweather':
             app = MeteoswissWeather(manifest_name)
+        elif app_name == 'mlh':
+            app = MLH(manifest_name)
         if not app:
             device.log(f'Farmware not found: {str(app_name)}', 'error')
             sys.exit(2)

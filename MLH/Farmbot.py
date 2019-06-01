@@ -12,13 +12,17 @@ from abc import abstractmethod
 from farmware_tools import device, app
 from datetime import *
 from typing import *
-from utils import utc_now, get_factory, Entity, parse_datetime, dump_datetime, parse_offset, TAny
+from utils import utc_now, get_factory, Entity, parse_datetime, dump_datetime, parse_offset, TAny, literal_eval_checked
 
 
 class Identifiable(Entity):
     id: int
+    name: str
     created_at: datetime
     updated_at: datetime
+
+
+TIdentifiable = TypeVar("TIdentifiable", bound=Identifiable)
 
 
 class Coordinate(Entity):
@@ -66,15 +70,23 @@ class Device(Identifiable):
     last_saw_api: Optional[datetime]
     last_saw_mq: Optional[datetime]
     mounted_tool_id: Optional[int]
-    name: str
     serial_number: str
     throttled_at: Optional[datetime]
     throttled_until: Optional[datetime]
 
 
 class Tool(Identifiable):
-    name: str
     status: str
+
+    @classmethod
+    def __parse__(cls, val) -> Dict[Union[str, int], Any]:
+        try:
+            return super().__parse__(val)
+        except ValueError:
+            try:
+                return _get_tools()[val].__dict__
+            except KeyError:
+                raise ValueError(f"Tool '{val}' not found")
 
 
 __point_types: Optional[Dict[str, type]] = None
@@ -106,7 +118,6 @@ def get_pointer_type(point_type: Type['Point']) -> str:
 class Point(Identifiable, Coordinate):
     device_id: int
     pointer_type: str
-    name: str
     meta: Dict[str, Any]
     radius: float
     discarded_at: Optional[datetime]
@@ -180,10 +191,18 @@ class Command(Entity):
 class Sequence(Identifiable):
     args: Dict[str, Any]
     color: str
-    name: str
     kind: str
     body: List[Command]
 
+    @classmethod
+    def __parse__(cls, val) -> Dict[Union[str, int], Any]:
+        try:
+            return super().__parse__(val)
+        except ValueError:
+            try:
+                return _get_sequences()[val].__dict__
+            except KeyError:
+                raise ValueError(f"Sequence '{val}' not found")
 
 class LocationData(Entity):
     position: Coordinate
@@ -239,6 +258,36 @@ class BotStateTree(Entity):
     alerts: Optional[Dict[str, Alert]]
 
 
+def __create_identifiable(endpoint: str, typ: Type[TIdentifiable]) -> Dict[Union[str, int], TIdentifiable]:
+    factory = get_factory(typ)
+    result: Dict[Union[str, int], TIdentifiable] = dict()
+    for data in app.get(endpoint):
+        instance: TIdentifiable = factory(data)
+        result[instance.id] = instance
+        result[instance.name] = instance
+    return result
+
+
+__sequences: Optional[Dict[Union[str, int], Sequence]] = None
+
+
+def _get_sequences(force_refresh: bool = False) -> Dict[str, Sequence]:
+    global __sequences
+    if force_refresh or __sequences is None:
+        __sequences = __create_identifiable('sequences', Sequence)
+    return __sequences
+
+
+__tools: Optional[Dict[Union[str, int], Tool]] = None
+
+
+def _get_tools(force_refresh: bool = False) -> Dict[str, Tool]:
+    global __tools
+    if force_refresh or __tools is None:
+        __tools = __create_identifiable('tools', Tool)
+    return __tools
+
+
 TPoint = TypeVar("TPoint", bound=Point)
 
 
@@ -250,17 +299,17 @@ class PointQuery(Generic[TPoint]):
     filter: Dict[str, Any]
     factory: Callable[[Any], TPoint]
 
-    def __init__(self, point_type: Type[TPoint], query: Union[str, List[Tuple[str, Any]]]):
+    def __init__(self, point_type: Type[TPoint], query: Union[str, Dict[str, Any]]):
         factory = get_factory(point_type)
         props: List[str] = factory.__self__.get_props()
         if isinstance(query, str):
-            query = ast.literal_eval(query)
+            query = literal_eval_checked(query, dict)
         self.predicates = []
         self.filter = {
             'pointer_type': get_pointer_type(point_type),
             'meta': {}
         }
-        for key, value in cast(List[Tuple[str, Any]], query):
+        for key, value in query.items():
             if key.startswith('!'):
                 negate = True
                 key = key[1:]
@@ -313,24 +362,6 @@ class PointQuery(Generic[TPoint]):
         return result
 
 
-class MoveOptimizer(object):
-    def __init__(self, targets: Iterable[Coordinate]):
-        self.targets = Set(targets)
-
-    def __iter__(self) -> Iterator[Coordinate]:
-        while len(self.targets) > 0:
-            curr_coord = get_factory(BotStateTree)(device.get_bot_state()).location_data.position
-            best_dist: float = math.inf
-            best_coord: Optional[Coordinate] = None
-            for coord in self.targets:
-                dist = coord.distance(curr_coord.x, curr_coord.y)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_coord = coord
-            self.targets.remove(best_coord)
-            yield best_coord
-
-
 TConfig = TypeVar("TConfig", bound=Entity)
 
 
@@ -343,15 +374,11 @@ def deserialize(typ: Type[TAny], data: Any) -> TAny:
 
 
 class Farmware(Generic[TConfig]):
-    __sequences: Optional[List[Sequence]]
-    __tools: Optional[List[Tool]]
     config: TConfig
     debug: bool
     app_name: str
 
     def __init__(self, config_type: Type[TConfig], manifest_name: Optional[str]):
-        self.__sequences = None
-        self.__tools = None
         self.debug = False
         self.local = False
         self.app_name = manifest_name or type(self).__name__
@@ -402,15 +429,11 @@ class Farmware(Generic[TConfig]):
 
     def sequences(self) -> List[Sequence]:
         """Get the available sequences."""
-        if self.__sequences is None:
-            self.__sequences = deserialize(List[Sequence], app.get('sequences'))
-        return self.__sequences
+        return list(_get_sequences().values())
 
     def tools(self) -> List[Tool]:
         """Get the available tools."""
-        if self.__tools is None:
-            self.__tools = deserialize(List[Tool], app.get('tools'))
-        return self.__tools
+        return list(_get_tools().values())
 
     def get_points(self, **kwargs) -> List[Point]:
         """Query point data from the web app.
@@ -523,3 +546,30 @@ class Farmware(Generic[TConfig]):
                     return position
             device.move_absolute(target.to_coordinate(), speed, device.assemble_coordinate(offset_x, offset_y, offset_z))
         return position
+
+    def query_points(self, typ: Type[TPoint], query: Union[str, Dict[str, Any]]) -> List[TPoint]:
+        return PointQuery(typ, query).execute()
+
+    def execute_sequence(self, sequence: Union[Sequence, str, int, None]):
+        if sequence is not None:
+            if not isinstance(sequence, Sequence):
+                sequence = _get_sequences()[sequence]
+            device.log(F"Executing sequence {sequence.name}")
+            if not self.debug:
+                device.execute(sequence.id)
+
+    def sort_moves(self, targets: Iterable[Coordinate]) -> Iterator[Coordinate]:
+        targets = list(targets)
+        while len(targets) > 0:
+            curr_coord = get_factory(BotStateTree)(device.get_bot_state()).location_data.position
+            best_dist: float = math.inf
+            best_coord: Optional[Coordinate] = None
+            best_ix: Optional[int] = None
+            for ix in range(len(targets)):
+                dist = targets[ix].distance(curr_coord.x, curr_coord.y)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_coord = targets[ix]
+                    best_ix = ix
+            del targets[best_ix]
+            yield best_coord

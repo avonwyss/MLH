@@ -10,7 +10,8 @@
   "zip": "https://github.com/avonwyss/MLH/archive/master.zip",
   "executable": "python",
   "args": [
-    "MLH-master/MLH/main.py"
+    "MLH-master/MLH/main.py",
+    "meteoswissweather"
   ],
   "config": [
     {

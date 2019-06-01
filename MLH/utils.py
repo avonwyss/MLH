@@ -63,7 +63,7 @@ def parse_date(val: Union[date, str, int, float, None], default: Optional[date] 
 def dump_datetime(val: Optional[datetime]) -> Optional[str]:
     """Dump an instant as ISO string ("YYYY-MM-DDThh:mm:ss.fffZ")"""
     if val:
-        return val.strftime("%Y-%m-%dT%H:%M:%S.%f")[:23]+'Z'
+        return val.strftime("%Y-%m-%dT%H:%M:%S.%f")[:23] + 'Z'
 
 
 def dump_date(val: Optional[date]) -> Optional[str]:
@@ -92,6 +92,20 @@ def local_now() -> datetime:
     return utc_to_local(utc_now())
 
 
+TAny = TypeVar("TAny")
+
+
+def literal_eval_checked(val: str, typ: Type[TAny], allowNone: bool = False) -> Optional[TAny]:
+    if val == 'None':
+        if not allowNone:
+            raise ValueError(f'Expected a {typ.__name__}, got None')
+        return None
+    result = ast.literal_eval(val)
+    if not isinstance(result, typ):
+        raise ValueError(f'Expected a {typ.__name__}, got a {result.__class__.__name__}')
+    return result
+
+
 class Entity(object):
     def __new__(cls, __dict__: Dict[str, Any] = None, *args, **kwargs):
         self = super().__new__(cls)
@@ -112,6 +126,10 @@ class Entity(object):
     def __repr__(self):
         return self.__dict__.__repr__()
 
+    @classmethod
+    def __parse__(cls, val) -> Dict[Union[str, int], Any]:
+        return literal_eval_checked(val, dict)
+
 
 TEntity = TypeVar("TEntity", bound=Entity)
 
@@ -126,7 +144,7 @@ factories: Dict[type, Callable[[Any], Any]] = {
 }
 
 
-class EntityFactory(object):
+class EntityFactory(Generic[TEntity]):
     __slots__ = ('cls', 'props')
 
     cls: Type[TEntity]
@@ -143,15 +161,12 @@ class EntityFactory(object):
 
     def make(self, data: Dict[str, Any]) -> TEntity:
         if isinstance(data, str):
-            data = ast.literal_eval(data)
+            data = self.cls.__parse__(data)
         if not isinstance(data, dict):
             raise ValueError(f"Cannot make entity, expected dict but got {type(data).__name__}")
         for key, factory in self.get_props().items():
             data[key] = factory(data.get(key))
         return self.cls(__dict__=data)
-
-
-TAny = TypeVar("TAny")
 
 
 def get_factory(expected_type: Type[TAny]) -> Callable[[Any], TAny]:
